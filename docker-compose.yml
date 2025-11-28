@@ -1,0 +1,60 @@
+services:
+  timescaledb:
+    image: timescale/timescaledb:latest-pg14
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin
+      POSTGRES_DB: sensordata
+    volumes:
+      - timescale_data:/var/lib/postgresql/data
+      - ./db/init-timescale.sql:/docker-entrypoint-initdb.d/init-timescale.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  postgres:
+    image: postgres:14
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin
+      POSTGRES_DB: analytics
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/init-postgres.sql:/docker-entrypoint-initdb.d/init-postgres.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build: .
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    environment:
+      TIMESCALE_HOST: timescaledb       # <--- FIXED
+      TIMESCALE_PORT: 5432
+      TIMESCALE_DB: sensordata
+      TIMESCALE_USER: admin
+      TIMESCALE_PASS: admin
+
+      PG_HOST: postgres                 # <--- FIXED
+      PG_PORT: 5432
+      PG_DB: analytics
+      PG_USER: admin
+      PG_PASS: admin
+
+      API_KEY: supersecretkey123
+      LOG_LEVEL: INFO
+    command: uvicorn api:app --host 0.0.0.0 --port 8000
+    ports:
+      - 8000                            # Railway auto-exposes this
+
+volumes:
+  timescale_data:
+  postgres_data:
